@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chronos - Interactive Schedule & Planner</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbar for grid */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #475569;
+        }
+        .time-grid-row {
+            height: 52px;
+        }
+        .event-card {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .event-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 20 !important;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 h-full flex flex-col transition-colors duration-200">
+
+    <!-- Header Navigation -->
+    <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 lg:px-6 py-3 flex items-center justify-between shadow-sm z-30 shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold text-xl shadow-md">
+                <i class="fa-solid font-bold fa-calendar-check"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">Chronos</h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">Smart Schedule & Time Planner</p>
+            </div>
+        </div>
+
+        <!-- Controls / Actions -->
+        <div class="flex items-center space-x-2 sm:space-x-3">
+            <button id="todayBtn" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                Today
+            </button>
+            <div class="flex items-center bg-slate-100 dark:bg-slate-700 rounded-lg p-0.5 border border-slate-200 dark:border-slate-600">
+                <button id="prevWeekBtn" class="p-1.5 rounded-md hover:bg-white dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 transition" title="Previous Week">
+                    <i class="fa-solid fa-chevron-left text-xs"></i>
+                </button>
+                <span id="currentWeekRange" class="px-2 text-xs font-semibold select-none">Oct 20 - Oct 26, 2026</span>
+                <button id="nextWeekBtn" class="p-1.5 rounded-md hover:bg-white dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 transition" title="Next Week">
+                    <i class="fa-solid fa-chevron-right text-xs"></i>
+                </button>
+            </div>
+
+            <button id="addEventBtn" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-lg shadow-sm flex items-center space-x-1.5 transition">
+                <i class="fa-solid fa-plus"></i>
+                <span class="hidden sm:inline">New Event</span>
+            </button>
+
+            <div class="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+            <!-- Import/Export & Theme Buttons -->
+            <button id="exportBtn" class="p-2 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition" title="Export Schedule (JSON)">
+                <i class="fa-solid fa-download"></i>
+            </button>
+            <button id="importBtn" class="p-2 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition" title="Import Schedule (JSON)">
+                <i class="fa-solid fa-upload"></i>
+            </button>
+            <input type="file" id="importFileInput" class="hidden" accept=".json">
+
+            <button id="themeToggleBtn" class="p-2 text-slate-500 hover:text-amber-500 dark:text-slate-400 dark:hover:text-amber-300 transition" title="Toggle Light/Dark Theme">
+                <i class="fa-solid fa-moon dark:hidden"></i>
+                <i class="fa-solid fa-sun hidden dark:inline"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main App Container -->
+    <div class="flex flex-1 overflow-hidden">
+
+        <!-- Sidebar / Filter & Agenda view -->
+        <aside class="w-80 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col shrink-0 hidden lg:flex">
+            <!-- Filter Section -->
+            <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Category Filters</h3>
+                <div class="flex flex-wrap gap-2" id="categoryFilters">
+                    <!-- Dynamic Filters injected here -->
+                </div>
+            </div>
+
+            <!-- Agenda / Summary Section -->
+            <div class="flex-1 overflow-y-auto p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Selected Day Agenda</h3>
+                    <span id="agendaDateLabel" class="text-xs font-medium text-blue-600 dark:text-blue-400">Today</span>
+                </div>
+                <div id="agendaList" class="space-y-2.5">
+                    <!-- Dynamic agenda cards -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Weekly Grid Content -->
+        <main class="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900">
+            <!-- Mobile Filters Bar -->
+            <div class="lg:hidden p-2.5 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center overflow-x-auto space-x-2" id="mobileCategoryFilters">
+                <!-- Mobile filters injected here -->
+            </div>
+
+            <!-- Calendar Container -->
+            <div class="flex-1 flex flex-col overflow-hidden">
+                <!-- Days Header -->
+                <div class="flex border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pr-2 shrink-0">
+                    <div class="w-16 sm:w-20 shrink-0 text-center py-3 text-xs font-semibold text-slate-400 border-r border-slate-200 dark:border-slate-700">Time</div>
+                    <div class="flex-1 grid grid-cols-7 divide-x divide-slate-200 dark:divide-slate-700" id="weekHeader">
+                        <!-- Dynamic Day Headers -->
+                    </div>
+                </div>
+
+                <!-- Time Grid Scrollable Body -->
+                <div id="gridScrollContainer" class="flex-1 overflow-y-auto relative flex">
+                    <!-- Time Column -->
+                    <div class="w-16 sm:w-20 shrink-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 select-none divide-y divide-slate-100 dark:divide-slate-700/50">
+                        <!-- Hour Labels -->
+                    </div>
+
+                    <!-- 7 Columns Grid -->
+                    <div class="flex-1 grid grid-cols-7 divide-x divide-slate-200 dark:divide-slate-700 relative bg-white dark:bg-slate-800/40" id="timeGridColumns">
+                        <!-- Dynamic columns for Mon-Sun -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Event Modal (Create / Edit) -->
+    <div id="eventModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md mx-4 overflow-hidden transform scale-95 transition-transform duration-200" id="modalCard">
+            <div class="p-5 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between bg-slate-50 dark:bg-slate-800/80">
+                <h3 id="modalTitle" class="text-base font-bold text-slate-800 dark:text-slate-100">Add New Event</h3>
+                <button id="closeModalBtn" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <form id="eventForm" class="p-5 space-y-4">
+                <input type="hidden" id="eventId">
+                
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Title</label>
+                    <input type="text" id="eventTitleInput" required placeholder="e.g., Team Sync Meeting" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Day</label>
+                        <select id="eventDayInput" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="0">Monday</option>
+                            <option value="1">Tuesday</option>
+                            <option value="2">Wednesday</option>
+                            <option value="3">Thursday</option>
+                            <option value="4">Friday</option>
+                            <option value="5">Saturday</option>
+                            <option value="6">Sunday</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Category</label>
+                        <select id="eventCategoryInput" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Start Time</label>
+                        <input type="time" id="eventStartInput" required class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">End Time</label>
+                        <input type="time" id="eventEndInput" required class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Description (Optional)</label>
+                    <textarea id="eventDescInput" rows="2" placeholder="Add details or notes..." class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+
+                <div class="pt-3 flex items-center justify-between border-t border-slate-200 dark:border-slate-700">
+                    <button type="button" id="deleteEventBtn" class="px-3 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition hidden">
+                        <i class="fa-solid fa-trash mr-1"></i> Delete
+                    </button>
+                    <div class="flex items-center space-x-2 ml-auto">
+                        <button type="button" id="cancelModalBtn" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition">Cancel</button>
+                        <button type="submit" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow transition">Save Event</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 px-4 py-2.5 rounded-xl shadow-lg text-xs font-medium flex items-center space-x-2 transform translate-y-10 opacity-0 transition-all duration-300 pointer-events-none z-50">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-green-400 dark:text-green-600 text-sm"></i>
+        <span id="toastMessage">Schedule saved!</span>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        // --- Categories Configuration ---
+        const CATEGORIES = {
+            work: { name: 'Work', bg: 'bg-blue-100 dark:bg-blue-900/40', text: 'text-blue-800 dark:text-blue-200', border: 'border-blue-300 dark:border-blue-700', badge: 'bg-blue-500' },
+            personal: { name: 'Personal', bg: 'bg-emerald-100 dark:bg-emerald-900/40', text: 'text-emerald-800 dark:text-emerald-200', border: 'border-emerald-300 dark:border-emerald-700', badge: 'bg-emerald-500' },
+            fitness: { name: 'Fitness', bg: 'bg-amber-100 dark:bg-amber-900/40', text: 'text-amber-800 dark:text-amber-200', border: 'border-amber-300 dark:border-amber-700', badge: 'bg-amber-500' },
+            study: { name: 'Study', bg: 'bg-purple-100 dark:bg-purple-900/40', text: 'text-purple-800 dark:text-purple-200', border: 'border-purple-300 dark:border-purple-700', badge: 'bg-purple-500' },
+            meetings: { name: 'Meetings', bg: 'bg-rose-100 dark:bg-rose-900/40', text: 'text-rose-800 dark:text-rose-200', border: 'border-rose-300 dark:border-rose-700', badge: 'bg-rose-500' }
+        };
+
+        const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const START_HOUR = 7; // 7:00 AM
+        const END_HOUR = 21;  // 9:00 PM
+
+        // --- State Management ---
+        let currentDate = new Date();
+        let events = [];
+        let activeFilters = new Set(Object.keys(CATEGORIES));
+        let selectedDayIndex = (new Date().getDay() + 6) % 7; // Monday = 0
+
+        // --- Sample Initial Data ---
+        const sampleEvents = [
+            { id: '1', title: 'Weekly Team Sync', day: 0, startTime: '09:00', endTime: '10:00', category: 'meetings', desc: 'Sync on sprint goals and progress.' },
+            { id: '2', title: 'Gym Workout', day: 0, startTime: '17:30', endTime: '18:30', category: 'fitness', desc: 'Leg day routine.' },
+            { id: '3', title: 'Deep Work: Coding', day: 1, startTime: '10:00', endTime: '12:30', category: 'work', desc: 'Focus on core application features.' },
+            { id: '4', title: 'JavaScript Study Group', day: 2, startTime: '14:00', endTime: '15:30', category: 'study', desc: 'Reviewing async/await patterns.' },
+            { id: '5', title: 'Grocery & Errands', day: 3, startTime: '18:00', endTime: '19:00', category: 'personal', desc: 'Pick up groceries for the week.' },
+            { id: '6', title: 'Project Demo & Review', day: 4, startTime: '11:00', endTime: '12:00', category: 'meetings', desc: 'Present deliverables to client.' }
+        ];
+
+        // --- App Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadTheme();
+            loadEvents();
+            setupCategoryOptions();
+            renderCategoryFilters();
+            renderGridHeader();
+            renderTimeColumn();
+            renderGridColumns();
+            renderEvents();
+            renderAgenda();
+            setupEventListeners();
+            scrollToCurrentTime();
+        });
+
+        // --- LocalStorage & Theme Handling ---
+        function loadTheme() {
+            if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        }
+
+        function toggleTheme() {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+
+        function loadEvents() {
+            const stored = localStorage.getItem('chronos_events');
+            if (stored) {
+                try {
+                    events = JSON.parse(stored);
+                } catch (e) {
+                    events = [...sampleEvents];
+                }
+            } else {
+                events = [...sampleEvents];
+                saveEvents();
+            }
+        }
+
+        function saveEvents() {
+            localStorage.setItem('chronos_events', JSON.stringify(events));
+            renderEvents();
+            renderAgenda();
+        }
+
+        // --- Render Helpers ---
+        function setupCategoryOptions() {
+            const select = document.getElementById('eventCategoryInput');
+            select.innerHTML = '';
+            Object.entries(CATEGORIES).forEach(([key, cat]) => {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.textContent = cat.name;
+                select.appendChild(opt);
+            });
+        }
+
+        function renderCategoryFilters() {
+            const container = document.getElementById('categoryFilters');
+            const mobileContainer = document.getElementById('mobileCategoryFilters');
+            container.innerHTML = '';
+            mobileContainer.innerHTML = '';
+
+            Object.entries(CATEGORIES).forEach(([key, cat]) => {
+                const isActive = activeFilters.has(key);
+                
+                // Desktop Sidebar Filter Tag
+                const btn = document.createElement('button');
+                btn.className = `px-3 py-1.5 rounded-lg text-xs font-medium border flex items-center space-x-2 transition ${
+                    isActive 
+                        ? `${cat.bg} ${cat.text} ${cat.border} ring-1 ring-slate-300 dark:ring-slate-600` 
+                        : 'bg-slate-100 dark:bg-slate-700/50 text-slate-400 border-transparent hover:bg-slate-200'
+                }`;
+                btn.innerHTML = `<span class="w-2 h-2 rounded-full ${cat.badge}"></span><span>${cat.name}</span>`;
+                btn.onclick = () => toggleFilter(key);
+                container.appendChild(btn);
+
+                // Mobile Filter Tag
+                const mobileBtn = btn.cloneNode(true);
+                mobileBtn.onclick = () => toggleFilter(key);
+                mobileContainer.appendChild(mobileBtn);
+            });
+        }
+
+        function toggleFilter(key) {
+            if (activeFilters.has(key)) {
+                if (activeFilters.size > 1) activeFilters.delete(key);
+            } else {
+                activeFilters.add(key);
+            }
+            renderCategoryFilters();
+            renderEvents();
+            renderAgenda();
+        }
+
+        function renderGridHeader() {
+            const header = document.getElementById('weekHeader');
+            header.innerHTML = '';
+            
+            const startOfWeek = getStartOfWeek(currentDate);
+            updateWeekRangeLabel(startOfWeek);
+
+            DAYS_OF_WEEK.forEach((dayName, idx) => {
+                const dayDate = new Date(startOfWeek);
+                dayDate.setDate(dayDate.getDate() + idx);
+                
+                const isToday = isSameDay(dayDate, new Date());
+                const isSelected = selectedDayIndex === idx;
+
+                const col = document.createElement('div');
+                col.className = `text-center py-2 px-1 cursor-pointer transition ${
+                    isSelected ? 'bg-blue-50/50 dark:bg-blue-900/20' : ''
+                }`;
+                col.onclick = () => {
+                    selectedDayIndex = idx;
+                    renderGridHeader();
+                    renderAgenda();
+                };
+
+                col.innerHTML = `
+                    <div class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">${dayName.substring(0, 3)}</div>
+                    <div class="mt-0.5 inline-flex items-center justify-center w-7 h-7 text-xs font-semibold rounded-full ${
+                        isToday 
+                            ? 'bg-blue-600 text-white shadow-sm' 
+                            : 'text-slate-700 dark:text-slate-300'
+                    }">
+                        ${dayDate.getDate()}
+                    </div>
+                `;
+                header.appendChild(col);
+            });
+        }
+
+        function renderTimeColumn() {
+            const container = document.getElementById('gridScrollContainer').firstElementChild;
+            container.innerHTML = '';
+            for (let h = START_HOUR; h <= END_HOUR; h++) {
+                const hourCell = document.createElement('div');
+                hourCell.className = 'time-grid-row flex items-start justify-center pt-1 text-[11px] font-medium text-slate-400';
+                const timeString = `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? 'AM' : 'PM'}`;
+                hourCell.textContent = timeString;
+                container.appendChild(hourCell);
+            }
+        }
+
+        function renderGridColumns() {
+            const columnsContainer = document.getElementById('timeGridColumns');
+            columnsContainer.innerHTML = '';
+
+            for (let day = 0; day < 7; day++) {
+                const col = document.createElement('div');
+                col.className = 'relative flex-1 divide-y divide-slate-100 dark:divide-slate-700/40';
+                col.dataset.day = day;
+
+                for (let h = START_HOUR; h <= END_HOUR; h++) {
+                    const slot = document.createElement('div');
+                    slot.className = 'time-grid-row hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer transition';
+                    slot.dataset.hour = h;
+                    slot.onclick = (e) => {
+                        // Avoid triggering when clicking existing event cards
+                        if (e.target === slot) {
+                            openModalForNewEvent(day, h);
+                        }
+                    };
+                    slot.ondragover = (e) => e.preventDefault();
+                    slot.ondrop = (e) => handleDrop(e, day, h);
+                    col.appendChild(slot);
+                }
+                columnsContainer.appendChild(col);
+            }
+        }
+
+        function renderEvents() {
+            // Remove all existing rendered cards
+            document.querySelectorAll('.event-card').forEach(el => el.remove());
+
+            const columnsContainer = document.getElementById('timeGridColumns');
+
+            events.forEach(ev => {
+                if (!activeFilters.has(ev.category)) return;
+
+                const column = columnsContainer.children[ev.day];
+                if (!column) return;
+
+                const cat = CATEGORIES[ev.category] || CATEGORIES.work;
+                const startMins = timeToMinutes(ev.startTime);
+                const endMins = timeToMinutes(ev.endTime);
+
+                const gridStartMins = START_HOUR * 60;
+                const topPx = ((startMins - gridStartMins) / 60) * 52;
+                const heightPx = Math.max(((endMins - startMins) / 60) * 52, 24); // min height
+
+                const card = document.createElement('div');
+                card.className = `event-card absolute inset-x-1 p-2 rounded-lg border ${cat.bg} ${cat.text} ${cat.border} shadow-sm cursor-pointer select-none overflow-hidden flex flex-col justify-between`;
+                card.style.top = `${topPx}px`;
+                card.style.height = `${heightPx}px`;
+                card.draggable = true;
+
+                card.innerHTML = `
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold truncate">${escapeHtml(ev.title)}</span>
+                        </div>
+                        <div class="text-[10px] opacity-80 font-medium mt-0.5">
+                            ${ev.startTime} - ${ev.endTime}
+                        </div>
+                    </div>
+                `;
+
+                // Drag and Drop support
+                card.ondragstart = (e) => {
+                    e.dataTransfer.setData('text/plain', ev.id);
+                };
+
+                card.onclick = (e) => {
+                    e.stopPropagation();
+                    openModalForEdit(ev);
+                };
+
+                column.appendChild(card);
+            });
+        }
+
+        function renderAgenda() {
+            const list = document.getElementById('agendaList');
+            const label = document.getElementById('agendaDateLabel');
+            list.innerHTML = '';
+
+            const dayName = DAYS_OF_WEEK[selectedDayIndex];
+            label.textContent = dayName;
+
+            const dayEvents = events
+                .filter(e => e.day === selectedDayIndex && activeFilters.has(e.category))
+                .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+
+            if (dayEvents.length === 0) {
+                list.innerHTML = `
+                    <div class="text-center py-8 text-slate-400 dark:text-slate-500">
+                        <i class="fa-solid fa-calendar-day text-2xl mb-2"></i>
+                        <p class="text-xs font-medium">No events scheduled</p>
+                    </div>
+                `;
+                return;
+            }
+
+            dayEvents.forEach(ev => {
+                const cat = CATEGORIES[ev.category] || CATEGORIES.work;
+                const item = document.createElement('div');
+                item.className = `p-3 rounded-xl border ${cat.bg} ${cat.border} transition hover:shadow-md cursor-pointer`;
+                item.onclick = () => openModalForEdit(ev);
+
+                item.innerHTML = `
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold uppercase rounded ${cat.badge} text-white mb-1">
+                                ${cat.name}
+                            </span>
+                            <h4 class="text-xs font-bold ${cat.text}">${escapeHtml(ev.title)}</h4>
+                            ${ev.desc ? `<p class="text-[11px] text-slate-600 dark:text-slate-300 mt-1 line-clamp-2">${escapeHtml(ev.desc)}</p>` : ''}
+                        </div>
+                        <span class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 shrink-0 ml-2">
+                            ${ev.startTime}
+                        </span>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        // --- Drag & Drop Handler ---
+        function handleDrop(e, targetDay, targetHour) {
+            e.preventDefault();
+            const id = e.dataTransfer.getData('text/plain');
+            const ev = events.find(e => e.id === id);
+            if (!ev) return;
+
+            const duration = timeToMinutes(ev.endTime) - timeToMinutes(ev.startTime);
+            const newStartMins = targetHour * 60;
+            const newEndMins = newStartMins + duration;
+
+            ev.day = targetDay;
+            ev.startTime = minutesToTime(newStartMins);
+            ev.endTime = minutesToTime(newEndMins);
+
+            saveEvents();
+            showToast('Event rescheduled successfully');
+        }
+
+        // --- Modal & Event Actions ---
+        function openModalForNewEvent(day = 0, hour = 9) {
+            document.getElementById('modalTitle').textContent = 'Add New Event';
+            document.getElementById('eventId').value = '';
+            document.getElementById('eventTitleInput').value = '';
+            document.getElementById('eventDayInput').value = day;
+            document.getElementById('eventCategoryInput').value = 'work';
+            document.getElementById('eventStartInput').value = `${String(hour).padStart(2, '0')}:00`;
+            document.getElementById('eventEndInput').value = `${String(hour + 1).padStart(2, '0')}:00`;
+            document.getElementById('eventDescInput').value = '';
+            
+            document.getElementById('deleteEventBtn').classList.add('hidden');
+            showModal();
+        }
+
+        function openModalForEdit(ev) {
+            document.getElementById('modalTitle').textContent = 'Edit Event';
+            document.getElementById('eventId').value = ev.id;
+            document.getElementById('eventTitleInput').value = ev.title;
+            document.getElementById('eventDayInput').value = ev.day;
+            document.getElementById('eventCategoryInput').value = ev.category;
+            document.getElementById('eventStartInput').value = ev.startTime;
+            document.getElementById('eventEndInput').value = ev.endTime;
+            document.getElementById('eventDescInput').value = ev.desc || '';
+
+            document.getElementById('deleteEventBtn').classList.remove('hidden');
+            showModal();
+        }
+
+        function showModal() {
+            const modal = document.getElementById('eventModal');
+            const card = document.getElementById('modalCard');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                card.classList.remove('scale-95');
+            }, 10);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('eventModal');
+            const card = document.getElementById('modalCard');
+            modal.classList.add('opacity-0');
+            card.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 200);
+        }
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('eventId').value;
+            const title = document.getElementById('eventTitleInput').value.trim();
+            const day = parseInt(document.getElementById('eventDayInput').value);
+            const category = document.getElementById('eventCategoryInput').value;
+            const startTime = document.getElementById('eventStartInput').value;
+            const endTime = document.getElementById('eventEndInput').value;
+            const desc = document.getElementById('eventDescInput').value.trim();
+
+            if (timeToMinutes(startTime) >= timeToMinutes(endTime)) {
+                showToast('End time must be after start time!', true);
+                return;
+            }
+
+            if (id) {
+                // Edit
+                const index = events.findIndex(e => e.id === id);
+                if (index !== -1) {
+                    events[index] = { id, title, day, category, startTime, endTime, desc };
+                    showToast('Event updated');
+                }
+            } else {
+                // Create
+                const newEv = {
+                    id: Date.now().toString(),
+                    title,
+                    day,
+                    category,
+                    startTime,
+                    endTime,
+                    desc
+                };
+                events.push(newEv);
+                showToast('Event added');
+            }
+
+            saveEvents();
+            closeModal();
+        }
+
+        function deleteCurrentEvent() {
+            const id = document.getElementById('eventId').value;
+            if (id) {
+                events = events.filter(e => e.id !== id);
+                saveEvents();
+                closeModal();
+                showToast('Event deleted');
+            }
+        }
+
+        // --- Export / Import ---
+        function exportSchedule() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(events, null, 2));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", `chronos_schedule_${new Date().toISOString().slice(0,10)}.json`);
+            dlAnchorElem.click();
+            showToast('Schedule exported to JSON');
+        }
+
+        function importSchedule(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const imported = JSON.parse(evt.target.result);
+                    if (Array.isArray(imported)) {
+                        events = imported;
+                        saveEvents();
+                        showToast('Schedule imported successfully');
+                    } else {
+                        showToast('Invalid schedule JSON format', true);
+                    }
+                } catch (err) {
+                    showToast('Failed to parse JSON file', true);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // --- Utility Functions ---
+        function timeToMinutes(timeStr) {
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
+        }
+
+        function minutesToTime(mins) {
+            const h = Math.floor(mins / 60);
+            const m = mins % 60;
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        }
+
+        function getStartOfWeek(d) {
+            const date = new Date(d);
+            const day = date.getDay();
+            const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Monday start
+            return new Date(date.setDate(diff));
+        }
+
+        function isSameDay(d1, d2) {
+            return d1.getFullYear() === d2.getFullYear() &&
+                   d1.getMonth() === d2.getMonth() &&
+                   d1.getDate() === d2.getDate();
+        }
+
+        function updateWeekRangeLabel(startOfWeek) {
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(endOfWeek.getDate() + 6);
+
+            const options = { month: 'short', day: 'numeric' };
+            const startStr = startOfWeek.toLocaleDateString('en-US', options);
+            const endStr = endOfWeek.toLocaleDateString('en-US', options);
+            const yearStr = endOfWeek.getFullYear();
+
+            document.getElementById('currentWeekRange').textContent = `${startStr} - ${endStr}, ${yearStr}`;
+        }
+
+        function scrollToCurrentTime() {
+            const now = new Date();
+            const currentHour = now.getHours();
+            if (currentHour >= START_HOUR && currentHour <= END_HOUR) {
+                const scrollContainer = document.getElementById('gridScrollContainer');
+                const targetPx = ((currentHour - START_HOUR) * 52) - 100;
+                scrollContainer.scrollTop = Math.max(0, targetPx);
+            }
+        }
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMessage.textContent = msg;
+            if (isError) {
+                toastIcon.className = "fa-solid fa-circle-exclamation text-red-400 text-sm";
+            } else {
+                toastIcon.className = "fa-solid fa-circle-check text-green-400 text-sm";
+            }
+
+            toast.classList.remove('translate-y-10', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-10', 'opacity-0');
+            }, 3000);
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        // --- Global Event Listeners ---
+        function setupEventListeners() {
+            document.getElementById('themeToggleBtn').onclick = toggleTheme;
+            document.getElementById('addEventBtn').onclick = () => openModalForNewEvent();
+            document.getElementById('closeModalBtn').onclick = closeModal;
+            document.getElementById('cancelModalBtn').onclick = closeModal;
+            document.getElementById('eventForm').onsubmit = handleFormSubmit;
+            document.getElementById('deleteEventBtn').onclick = deleteCurrentEvent;
+
+            document.getElementById('exportBtn').onclick = exportSchedule;
+            document.getElementById('importBtn').onclick = () => document.getElementById('importFileInput').click();
+            document.getElementById('importFileInput').onchange = importSchedule;
+
+            // Date Navigation
+            document.getElementById('prevWeekBtn').onclick = () => {
+                currentDate.setDate(currentDate.getDate() - 7);
+                renderGridHeader();
+                renderEvents();
+                renderAgenda();
+            };
+
+            document.getElementById('nextWeekBtn').onclick = () => {
+                currentDate.setDate(currentDate.getDate() + 7);
+                renderGridHeader();
+                renderEvents();
+                renderAgenda();
+            };
+
+            document.getElementById('todayBtn').onclick = () => {
+                currentDate = new Date();
+                selectedDayIndex = (new Date().getDay() + 6) % 7;
+                renderGridHeader();
+                renderEvents();
+                renderAgenda();
+                scrollToCurrentTime();
+            };
+        }
+    </script>
+</body>
+</html>
